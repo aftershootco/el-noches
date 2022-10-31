@@ -149,7 +149,7 @@ fn combine(r: &[u8], g: &[u8], b: &[u8], height: u32, width: u32) -> Vec<[u8; 3]
     rgb
 }
 
-fn match_histogram(source: &'static str, reference: &'static str, name: String) {
+pub fn match_histogram(source: &'static str, reference: &'static str, name: String) {
     let src_path = std::path::Path::new(source);
     let ref_path = std::path::Path::new(reference);
     let ref_img = image::open(ref_path).expect("File cannot be opened.");
