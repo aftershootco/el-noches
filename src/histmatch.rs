@@ -1,6 +1,4 @@
 use std::{collections::BTreeMap, ops::Add};
-
-// use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
 pub struct ImageChannels {
     r: Vec<u8>,
     g: Vec<u8>,
@@ -8,31 +6,6 @@ pub struct ImageChannels {
     width: u32,
     height: u32,
 }
-
-// impl From<DynamicImage> for ImageChannels {
-//     fn from(image: DynamicImage) -> Self {
-//         let width = image.width();
-//         let height = image.height();
-//         let mut r: Vec<u8> = Vec::with_capacity((width * height) as usize);
-//         let mut g: Vec<u8> = Vec::with_capacity((width * height) as usize);
-//         let mut b: Vec<u8> = Vec::with_capacity((width * height) as usize);
-//         for i in 0..height {
-//             for j in 0..width {
-//                 let pixel = image.get_pixel(j, i).0;
-//                 r.push(pixel[0] as u8);
-//                 g.push(pixel[1] as u8);
-//                 b.push(pixel[2] as u8);
-//             }
-//         }
-//         Self {
-//             r,
-//             g,
-//             b,
-//             width,
-//             height,
-//         }
-//     }
-// }
 
 impl ImageChannels {
     pub fn new(r: Vec<u8>, g: Vec<u8>, b: Vec<u8>, width: u32, height: u32) -> Self {
@@ -158,59 +131,6 @@ fn apply(hist: &[u8], img: &[u8]) -> Vec<u8> {
     }
     result
 }
-
-// fn combine(r: &[u8], g: &[u8], b: &[u8], height: u32, width: u32) -> Vec<[u8; 3]> {
-//     let mut rgb: Vec<[u8; 3]> = Vec::with_capacity((width * height) as usize);
-//     for i in 0..height {
-//         for j in 0..width {
-//             let r = r[(j + (i * width)) as usize];
-//             let g = g[(j + (i * width)) as usize];
-//             let b = b[(j + (i * width)) as usize];
-//             rgb.push([r, g, b]);
-//         }
-//     }
-//     rgb
-// }
-
-// pub fn match_histogram(source: impl AsRef<Path>, reference: impl AsRef<Path>, name: String) {
-//     let src_path = source.as_ref();
-//     let ref_path = reference.as_ref();
-//     let ref_img = image::open(ref_path).expect("File cannot be opened.");
-//     let src_img = image::open(src_path).expect("File cannot be opened.");
-
-//     let ref_img_channels = ImageChannels::from(ref_img);
-//     let src_img_channels = ImageChannels::from(src_img);
-
-//     let ref_histo = ChannelsHistogram::from(&ref_img_channels);
-//     let src_histo = ChannelsHistogram::from(&src_img_channels);
-
-//     let ref_cdf_r = equalize(cdf(&ref_histo.get_channel('r')));
-//     let ref_cdf_g = equalize(cdf(&ref_histo.get_channel('g')));
-//     let ref_cdf_b = equalize(cdf(&ref_histo.get_channel('b')));
-
-//     let src_cdf_r = equalize(cdf(&src_histo.get_channel('r')));
-//     let src_cdf_g = equalize(cdf(&src_histo.get_channel('g')));
-//     let src_cdf_b = equalize(cdf(&src_histo.get_channel('b')));
-
-//     let mapped_r = mapping(&src_cdf_r, &ref_cdf_r);
-//     let mapped_g = mapping(&src_cdf_g, &ref_cdf_g);
-//     let mapped_b = mapping(&src_cdf_b, &ref_cdf_b);
-
-//     let r = apply(&mapped_r, &src_img_channels.get_channel('r'));
-//     let g = apply(&mapped_g, &src_img_channels.get_channel('g'));
-//     let b = apply(&mapped_b, &src_img_channels.get_channel('b'));
-
-//     let height = src_histo.height;
-//     let width = src_histo.width;
-//     let rgb = combine(&r, &g, &b, src_histo.height, src_histo.width);
-//     let mut new = RgbImage::new(width, height);
-//     for i in 0..height {
-//         for j in 0..width {
-//             new.put_pixel(j, i, Rgb(rgb[(j + (i * width)) as usize]));
-//         }
-//     }
-//     new.save(name).unwrap();
-// }
 
 pub fn match_histogram_rgb_array(
     source: ImageChannels,
