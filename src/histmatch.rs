@@ -1,13 +1,13 @@
 use std::{collections::BTreeMap, ops::Add};
 
-pub struct ImageChannels {
-    image: Vec<u8>,
+pub struct ImageChannels<'image> {
+    image: &'image mut [u8],
     width: u32,
     height: u32,
 }
 
-impl ImageChannels {
-    pub fn new(image: Vec<u8>, width: u32, height: u32) -> Self {
+impl<'image> ImageChannels<'image> {
+    pub fn new(image: &'image mut [u8], width: u32, height: u32) -> Self {
         Self {
             image,
             width,
@@ -29,14 +29,14 @@ struct ChannelsHistogram {
     height: u32,
 }
 
-impl From<&ImageChannels> for ChannelsHistogram {
+impl From<&ImageChannels<'_>> for ChannelsHistogram {
     fn from(img: &ImageChannels) -> Self {
         let mut histogram_r = [0.0; 256];
         let mut histogram_g = [0.0; 256];
         let mut histogram_b = [0.0; 256];
         let width = img.get_width();
         let height = img.get_height();
-        let _ = img.image.as_slice().chunks_exact(3).map(|channel| {
+        img.image.chunks_exact(3).for_each(|channel| {
             histogram_r[channel[0] as usize] += 1.;
             histogram_g[channel[1] as usize] += 1.;
             histogram_b[channel[2] as usize] += 1.;
@@ -60,6 +60,7 @@ impl ChannelsHistogram {
     }
 }
 
+#[inline]
 fn equalize<const LEN: usize>(img: [f32; LEN]) -> [u32; LEN] {
     let mut new_pixel_level: [u32; LEN] = [0; LEN];
     for i in 0..LEN {
@@ -68,23 +69,24 @@ fn equalize<const LEN: usize>(img: [f32; LEN]) -> [u32; LEN] {
     new_pixel_level
 }
 
-fn cumwantsome<T: Add<Output = T> + Copy + Default, const LEN: usize>(arr: &[T; LEN]) -> [T; LEN] {
-    let mut cumsum = [T::default(); LEN];
-    cumsum[0] = arr[0];
+#[inline]
+fn cumwantsome<T: Add<Output = T> + Copy + Default, const LEN: usize>(
+    mut arr: [T; LEN],
+) -> [T; LEN] {
     for i in 1..arr.len() {
-        cumsum[i] = cumsum[i - 1] + arr[i];
+        arr[i] = arr[i - 1] + arr[i];
     }
-    cumsum
+    arr
 }
 
-fn cdf<const LEN: usize>(img: &[f32; LEN]) -> [f32; LEN] {
-    let cdf = cumwantsome(img);
-    let number = cdf[cdf.len() - 1];
-    let mut normalized_cdf = [0.0; LEN];
-    for (index, i) in cdf.iter().enumerate() {
-        normalized_cdf[index] = *i / number;
-    }
-    normalized_cdf
+#[inline]
+fn cdf<const LEN: usize>(img: [f32; LEN]) -> [f32; LEN] {
+    let mut cdf = cumwantsome(img);
+    let number = cdf[LEN - 1];
+    cdf.iter_mut().for_each(|i| {
+        *i = *i / number;
+    });
+    cdf
 }
 
 fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8; 256] {
@@ -109,32 +111,31 @@ fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8;
     }
     mapped
 }
-fn apply(r_map: &[u8; 256], g_map: &[u8; 256], b_map: &[u8; 256], img: &[u8]) -> Vec<u8> {
-    let mut result = Vec::with_capacity(img.len());
-    for i in 0..img.len() {
-        result.push(r_map[img[i as usize] as usize]);
-        result.push(g_map[img[i as usize] as usize]);
-        result.push(b_map[img[i as usize] as usize]);
-    }
-    result
+
+#[inline]
+fn apply(r_map: &[u8; 256], g_map: &[u8; 256], b_map: &[u8; 256], img: &mut [u8]) {
+    img.chunks_exact_mut(3).for_each(|channel| {
+        channel[0] = r_map[channel[0] as usize];
+        channel[1] = g_map[channel[1] as usize];
+        channel[2] = b_map[channel[2] as usize];
+    });
 }
 
-pub fn match_histogram_rgb_array(source: ImageChannels, reference: ImageChannels) -> Vec<u8> {
+pub fn match_histogram_rgb_array(source: ImageChannels, reference: ImageChannels) {
     let ref_histo = ChannelsHistogram::from(&reference);
     let src_histo = ChannelsHistogram::from(&source);
 
-    let ref_cdf_r = equalize(cdf(&ref_histo.get_channel('r')));
-    let ref_cdf_g = equalize(cdf(&ref_histo.get_channel('g')));
-    let ref_cdf_b = equalize(cdf(&ref_histo.get_channel('b')));
+    let ref_cdf_r = equalize(cdf(ref_histo.get_channel('r')));
+    let ref_cdf_g = equalize(cdf(ref_histo.get_channel('g')));
+    let ref_cdf_b = equalize(cdf(ref_histo.get_channel('b')));
 
-    let src_cdf_r = equalize(cdf(&src_histo.get_channel('r')));
-    let src_cdf_g = equalize(cdf(&src_histo.get_channel('g')));
-    let src_cdf_b = equalize(cdf(&src_histo.get_channel('b')));
+    let src_cdf_r = equalize(cdf(src_histo.get_channel('r')));
+    let src_cdf_g = equalize(cdf(src_histo.get_channel('g')));
+    let src_cdf_b = equalize(cdf(src_histo.get_channel('b')));
 
     let mapped_r = mapping(&src_cdf_r, &ref_cdf_r);
     let mapped_g = mapping(&src_cdf_g, &ref_cdf_g);
     let mapped_b = mapping(&src_cdf_b, &ref_cdf_b);
 
-    let r = apply(&mapped_r, &mapped_g, &mapped_b, &source.image);
-    r
+    apply(&mapped_r, &mapped_g, &mapped_b, source.image);
 }
