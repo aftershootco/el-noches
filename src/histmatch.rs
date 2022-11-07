@@ -54,6 +54,7 @@ impl From<&ImageChannels> for ChannelsHistogram {
                 histogram_b[(img.get_channel('b'))[(j + (i * width)) as usize] as usize] += 1.;
             }
         }
+
         Self {
             hist: (histogram_r, histogram_b, histogram_g),
             width,
@@ -73,41 +74,40 @@ impl ChannelsHistogram {
     }
 }
 
-fn equalize(img: Vec<f32>) -> [u32; 256] {
-    const L: u32 = 256;
-    let mut new_pixel_level: [u32; 256] = [0; 256];
-    for i in 0..L {
-        new_pixel_level[i as usize] = ((img[i as usize] * 255.0).ceil()) as u32;
+fn equalize<const LEN: usize>(img: [f32; LEN]) -> [u32; LEN] {
+    let mut new_pixel_level: [u32; LEN] = [0; LEN];
+    for i in 0..LEN {
+        new_pixel_level[i] = ((img[i as usize] * 255.0).ceil()) as u32;
     }
     new_pixel_level
 }
 
-fn cumwantsome<T: Add<Output = T> + Copy>(arr: &[T]) -> Vec<T> {
-    let mut cumsum = Vec::<T>::with_capacity(arr.len());
-    cumsum.push(arr[0]);
+fn cumwantsome<T: Add<Output = T> + Copy + Default, const LEN: usize>(arr: &[T; LEN]) -> [T; LEN] {
+    let mut cumsum = [T::default(); LEN];
+    cumsum[0] = arr[0];
     for i in 1..arr.len() {
-        cumsum.push(cumsum[i - 1] + arr[i]);
+        cumsum[i] = cumsum[i - 1] + arr[i];
     }
     cumsum
 }
 
-fn cdf(img: &[f32; 256]) -> Vec<f32> {
+fn cdf<const LEN: usize>(img: &[f32; LEN]) -> [f32; LEN] {
     let cdf = cumwantsome(img);
     let number = cdf[cdf.len() - 1];
-    let mut normalized_cdf = Vec::with_capacity(img.len());
-    for i in cdf.iter() {
-        let x = *i as f32 / number as f32;
-        normalized_cdf.push(x);
+    let mut normalized_cdf = [0.0; LEN];
+    for (index, i) in cdf.iter().enumerate() {
+        normalized_cdf[index] = *i / number;
     }
     normalized_cdf
 }
 
-fn mapping(src_img: &[u32], ref_img: &[u32]) -> [u8; 256] {
+fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8; 256] {
+    let lookup: BTreeMap<u32, u32> = ref_img
+        .into_iter()
+        .enumerate()
+        .map(|(n, i)| (*i, n as u32))
+        .collect();
     let mut mapped = [0; 256];
-    let mut lookup: BTreeMap<u32, u32> = std::collections::BTreeMap::new();
-    for (n, i) in ref_img.iter().enumerate() {
-        lookup.insert(*i, n as u32);
-    }
     for (i, n) in src_img.iter().enumerate() {
         let key = *n;
         let upper = lookup.range(key..).next();
