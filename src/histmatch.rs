@@ -1,18 +1,15 @@
 use std::{collections::BTreeMap, ops::Add};
+
 pub struct ImageChannels {
-    r: Vec<u8>,
-    g: Vec<u8>,
-    b: Vec<u8>,
+    image: Vec<u8>,
     width: u32,
     height: u32,
 }
 
 impl ImageChannels {
-    pub fn new(r: Vec<u8>, g: Vec<u8>, b: Vec<u8>, width: u32, height: u32) -> Self {
+    pub fn new(image: Vec<u8>, width: u32, height: u32) -> Self {
         Self {
-            r,
-            g,
-            b,
+            image,
             width,
             height,
         }
@@ -22,14 +19,6 @@ impl ImageChannels {
     }
     fn get_width(&self) -> u32 {
         self.width
-    }
-    fn get_channel(&self, channel: char) -> &Vec<u8> {
-        match channel {
-            'r' => &self.r,
-            'g' => &self.g,
-            'b' => &self.b,
-            _ => panic!("Only 'r'/'g'/'b' channel allowed."),
-        }
     }
 }
 
@@ -47,14 +36,11 @@ impl From<&ImageChannels> for ChannelsHistogram {
         let mut histogram_b = [0.0; 256];
         let width = img.get_width();
         let height = img.get_height();
-        for i in 0..height {
-            for j in 0..width {
-                histogram_r[(img.get_channel('r'))[(j + (i * width)) as usize] as usize] += 1.;
-                histogram_g[(img.get_channel('g'))[(j + (i * width)) as usize] as usize] += 1.;
-                histogram_b[(img.get_channel('b'))[(j + (i * width)) as usize] as usize] += 1.;
-            }
-        }
-
+        let _ = img.image.as_slice().chunks_exact(3).map(|channel| {
+            histogram_r[channel[0] as usize] += 1.;
+            histogram_g[channel[1] as usize] += 1.;
+            histogram_b[channel[2] as usize] += 1.;
+        });
         Self {
             hist: (histogram_r, histogram_b, histogram_g),
             width,
@@ -123,19 +109,17 @@ fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8;
     }
     mapped
 }
-fn apply(hist: &[u8], img: &[u8]) -> Vec<u8> {
+fn apply(r_map: &[u8; 256], g_map: &[u8; 256], b_map: &[u8; 256], img: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(img.len());
-
     for i in 0..img.len() {
-        result.push(hist[img[i as usize] as usize]);
+        result.push(r_map[img[i as usize] as usize]);
+        result.push(g_map[img[i as usize] as usize]);
+        result.push(b_map[img[i as usize] as usize]);
     }
     result
 }
 
-pub fn match_histogram_rgb_array(
-    source: ImageChannels,
-    reference: ImageChannels,
-) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+pub fn match_histogram_rgb_array(source: ImageChannels, reference: ImageChannels) -> Vec<u8> {
     let ref_histo = ChannelsHistogram::from(&reference);
     let src_histo = ChannelsHistogram::from(&source);
 
@@ -151,9 +135,6 @@ pub fn match_histogram_rgb_array(
     let mapped_g = mapping(&src_cdf_g, &ref_cdf_g);
     let mapped_b = mapping(&src_cdf_b, &ref_cdf_b);
 
-    let r = apply(&mapped_r, source.get_channel('r'));
-    let g = apply(&mapped_g, source.get_channel('g'));
-    let b = apply(&mapped_b, source.get_channel('b'));
-
-    (r, g, b)
+    let r = apply(&mapped_r, &mapped_g, &mapped_b, &source.image);
+    r
 }
