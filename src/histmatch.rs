@@ -84,20 +84,20 @@ fn cdf<const LEN: usize>(img: [f32; LEN]) -> [f32; LEN] {
     let mut cdf = cumwantsome(img);
     let number = cdf[LEN - 1];
     cdf.iter_mut().for_each(|i| {
-        *i = *i / number;
+        *i /= number;
     });
     cdf
 }
 
 fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8; 256] {
-    let lookup: BTreeMap<u32, u32> = ref_img
-        .into_iter()
+    let lookup: BTreeMap<i64, i64> = ref_img
+        .iter()
         .enumerate()
-        .map(|(n, i)| (*i, n as u32))
+        .map(|(n, i)| (*i as i64, n as i64))
         .collect();
     let mut mapped = [0; 256];
     for (i, n) in src_img.iter().enumerate() {
-        let key = *n;
+        let key = *n as i64;
         let upper = lookup.range(key..).next();
         let lower = lookup.range(..key).rev().next();
         let upper = *upper.unwrap_or((&0, &255)).1;
