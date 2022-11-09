@@ -69,6 +69,7 @@ fn equalize<const LEN: usize>(img: [f32; LEN]) -> [u32; LEN] {
     new_pixel_level
 }
 
+// Calculates the Cumulative Sum of the input array inplace
 #[inline]
 fn cumwantsome<T: Add<Output = T> + Copy + Default, const LEN: usize>(
     mut arr: [T; LEN],
@@ -79,9 +80,11 @@ fn cumwantsome<T: Add<Output = T> + Copy + Default, const LEN: usize>(
     arr
 }
 
+// CDF is Cumulative Distributive Frequency which is basically Cumulative Sum
+// divided by the total sum.
 #[inline]
-fn cdf<const LEN: usize>(img: [f32; LEN]) -> [f32; LEN] {
-    let mut cdf = cumwantsome(img);
+fn cdf<const LEN: usize>(arr: [f32; LEN]) -> [f32; LEN] {
+    let mut cdf = cumwantsome(arr);
     let number = cdf[LEN - 1];
     cdf.iter_mut().for_each(|i| {
         *i /= number;
@@ -89,14 +92,22 @@ fn cdf<const LEN: usize>(img: [f32; LEN]) -> [f32; LEN] {
     cdf
 }
 
-fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8; 256] {
-    let lookup: BTreeMap<i64, i64> = ref_img
+// Basically creates a Lookup Table that has pixelvalue on lhs and also pixel value on rhs 
+// To create this table we take the CDF array and then take the array on the left iterate 
+// through it sequentially and take it's value(frequency) find the closest value in the ref_img_cdf
+// then map the pixel value of current to the parent of the value found.
+// eg. mapping([(1,2); (2, 10)], [(1,10); (2,2)]) => [(1,2), (2,1)]
+// or  mapping([(k1,v1); (k2, v2)], [(X1,Y1); (X2,Y2)]) => [(K1,X2), (k2,X1)]
+// These value were matched by looking at frequency.
+
+fn mapping<const LEN: usize>(src_img_cdf: &[u32; LEN], ref_img_cdf: &[u32; LEN]) -> [u8; 256] {
+    let lookup: BTreeMap<i64, i64> = ref_img_cdf
         .iter()
         .enumerate()
-        .map(|(n, i)| (*i as i64, n as i64))
+        .map(|(value, frequency)| (*frequency as i64, value as i64))
         .collect();
     let mut mapped = [0; 256];
-    for (i, n) in src_img.iter().enumerate() {
+    for (i, n) in src_img_cdf.iter().enumerate() {
         let key = *n as i64;
         let upper = lookup.range(key..).next();
         let lower = lookup.range(..key).rev().next();
@@ -112,9 +123,15 @@ fn mapping<const LEN: usize>(src_img: &[u32; LEN], ref_img: &[u32; LEN]) -> [u8;
     mapped
 }
 
+// Applies the mapped array back into image for every channel.
+// For a single channel how it works is by replacing the current value 
+// with it's value in the mapped array.
+// For eg. if the current value is 3 we will look at the mapped_array[3] 
+// and set whatever value we get from there inplace of 3.
+
 #[inline]
-fn apply(r_map: &[u8; 256], g_map: &[u8; 256], b_map: &[u8; 256], img: &mut [u8]) {
-    img.chunks_exact_mut(3).for_each(|channel| {
+fn apply(r_map: &[u8; 256], g_map: &[u8; 256], b_map: &[u8; 256], src_img: &mut [u8]) {
+    src_img.chunks_exact_mut(3).for_each(|channel| {
         channel[0] = r_map[channel[0] as usize];
         channel[1] = g_map[channel[1] as usize];
         channel[2] = b_map[channel[2] as usize];
